@@ -343,33 +343,145 @@ function group(array, keySelector, valueSelector) {
  *  For more examples see unit tests.
  */
 
+function BaseCssSelector(
+  value,
+  callOrder = [
+    { name: 'element', isCalled: false },
+    { name: 'id', isCalled: false },
+    { name: 'class', isCalled: false },
+    { name: 'attr', isCalled: false },
+    { name: 'pseudoClass', isCalled: false },
+    { name: 'pseudoElement', isCalled: false },
+  ]
+) {
+  this.selector = value;
+  this.callOrder = callOrder;
+
+  this.checkSingleCall = function checkSingleCall(selectorName) {
+    const orderElement = this.callOrder.find((i) => i.name === selectorName);
+
+    if (orderElement.isCalled)
+      throw new Error(
+        'Element, id and pseudo-element should not occur more then one time inside the selector'
+      );
+
+    orderElement.isCalled = true;
+  };
+
+  this.checkOrder = function checkOrder(selectorName) {
+    const ind = this.callOrder.findIndex((i) => i.name === selectorName);
+    const isOrderInvalid = this.callOrder
+      .slice(ind + 1)
+      .some((i) => i.isCalled);
+
+    if (isOrderInvalid)
+      throw new Error(
+        'Selector parts should be arranged in the following order: element, id, class, attribute, pseudo-class, pseudo-element'
+      );
+
+    this.callOrder[ind].isCalled = true;
+  };
+
+  this.stringify = function stringify() {
+    return this.selector;
+  };
+}
+
+function BaseElementSelector(builder, value) {
+  BaseCssSelector.call(
+    this,
+    `${builder.selector ?? ''}${value}`,
+    builder.callOrder
+  );
+  this.checkSingleCall('element');
+  this.checkOrder('element');
+  return { ...builder, ...this };
+}
+
+function BaseIdSelector(builder, value) {
+  BaseCssSelector.call(
+    this,
+    `${builder.selector ?? ''}#${value}`,
+    builder.callOrder
+  );
+  this.checkSingleCall('id');
+  this.checkOrder('id');
+  return { ...builder, ...this };
+}
+
+function BaseClassSelector(builder, value) {
+  BaseCssSelector.call(
+    this,
+    `${builder.selector ?? ''}.${value}`,
+    builder.callOrder
+  );
+  this.checkOrder('class');
+  return { ...builder, ...this };
+}
+
+function BaseAttrSelector(builder, value) {
+  BaseCssSelector.call(
+    this,
+    `${builder.selector ?? ''}[${value}]`,
+    builder.callOrder
+  );
+  this.checkOrder('attr');
+  return { ...builder, ...this };
+}
+
+function BasePseudoClassSelector(builder, value) {
+  BaseCssSelector.call(
+    this,
+    `${builder.selector ?? ''}:${value}`,
+    builder.callOrder
+  );
+  this.checkOrder('pseudoClass');
+  return { ...builder, ...this };
+}
+
+function BasePseudoElementSelector(builder, value) {
+  BaseCssSelector.call(
+    this,
+    `${builder.selector ?? ''}::${value}`,
+    builder.callOrder
+  );
+  this.checkSingleCall('pseudoElement');
+  this.checkOrder('pseudoElement');
+  return { ...builder, ...this };
+}
+
 const cssSelectorBuilder = {
-  element(/* value */) {
-    throw new Error('Not implemented');
+  element(value) {
+    return new BaseElementSelector(this, value);
   },
 
-  id(/* value */) {
-    throw new Error('Not implemented');
+  id(value) {
+    return new BaseIdSelector(this, value);
   },
 
-  class(/* value */) {
-    throw new Error('Not implemented');
+  class(value) {
+    return new BaseClassSelector(this, value);
   },
 
-  attr(/* value */) {
-    throw new Error('Not implemented');
+  attr(value) {
+    return new BaseAttrSelector(this, value);
   },
 
-  pseudoClass(/* value */) {
-    throw new Error('Not implemented');
+  pseudoClass(value) {
+    return new BasePseudoClassSelector(this, value);
   },
 
-  pseudoElement(/* value */) {
-    throw new Error('Not implemented');
+  pseudoElement(value) {
+    return new BasePseudoElementSelector(this, value);
   },
 
-  combine(/* selector1, combinator, selector2 */) {
-    throw new Error('Not implemented');
+  combine(selector1, combinator, selector2) {
+    return {
+      ...this,
+      ...new BaseCssSelector(
+        `${selector1.stringify()} ${combinator} ${selector2.stringify()}`
+      ),
+    };
   },
 };
 
